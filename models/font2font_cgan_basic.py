@@ -153,10 +153,10 @@ class Font2Font(object):
                                     self.input_filters + self.output_filters],
                                    name='real_A_and_B_images')
 
-        no_target_data = tf.placeholder(tf.float32,
-                                        [self.batch_size, self.input_width, self.input_width,
-                                         self.input_filters + self.output_filters],
-                                        name='no_target_A_and_B_images')
+        # no_target_data = tf.placeholder(tf.float32,
+        #                                 [self.batch_size, self.input_width, self.input_width,
+        #                                  self.input_filters + self.output_filters],
+        #                                 name='no_target_A_and_B_images')
         # target images
         real_B = real_data[:, :, :, :self.input_filters]
         # source images
@@ -192,7 +192,7 @@ class Font2Font(object):
         g_merged_summary = tf.summary.merge([g_loss_summary])
 
         # expose useful nodes in the graph as handles globally
-        input_handle = InputHandle(real_data=real_data, no_target_data=no_target_data)
+        input_handle = InputHandle(real_data=real_data)
 
         loss_handle = LossHandle(d_loss=d_loss, g_loss=g_loss, d_loss_real=d_loss_real, d_loss_fake=d_loss_fake)
 
