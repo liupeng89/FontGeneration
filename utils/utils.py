@@ -64,7 +64,6 @@ def merge(images, size):
     return img
 
 
-
 def save_concat_images(imgs, img_path):
     concated = np.concatenate(imgs, axis=1)
     misc.imsave(img_path, concated)

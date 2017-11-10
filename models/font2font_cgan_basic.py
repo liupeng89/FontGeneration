@@ -325,7 +325,7 @@ class Font2Font(object):
 
         for idx, batch in enumerate(val_batch_iter):
             fake_imgs, real_imgs, d_loss, g_loss, l1_loss = self.generate_fake_samples(batch)
-            print(" %d---Sample: d_loss: %.5f, g_loss: %.5f, l1_loss: %.5f" % (idx, d_loss, g_loss, l1_loss))
+            print(" %d Sample: d_loss: %.5f, g_loss: %.5f, l1_loss: %.5f" % (idx, d_loss, g_loss, l1_loss))
 
             model_id, _ = self.get_model_id_and_dir()
             model_sample_dir = os.path.join(self.sample_dir, model_id)
@@ -334,10 +334,26 @@ class Font2Font(object):
 
             merged_fake_images = merge(scale_back(fake_imgs), [self.batch_size, 1])
             merged_real_images = merge(scale_back(real_imgs), [self.batch_size, 1])
-            merged_pair = np.concatenate([merged_real_images, merged_fake_images], axis=1)
 
-            sample_img_path = os.path.join(model_sample_dir, "sample_%02d_%04d_%d.png" % (epoch, step, idx))
-            misc.imsave(sample_img_path, merged_pair)
+            for img_id, img in enumerate(merged_fake_images):
+                # calculate the CR
+                cover_rate = compare_mse(merged_real_images[img_id], merged_fake_images[img_id])
+
+                # calculate the SSIM
+                ssim = compare_ssim(merged_real_images[img_id], merged_fake_images[img_id])
+
+                merged_img = np.concatenate([merged_fake_images[id], merged_real_images[id]], axis=1)
+                img_num = idx * self.batch_size + img_id
+                sample_img_path = os.path.join(model_sample_dir, "sample_%03d_%4d_%.5f_%.5f.png" % (epoch, img_num,
+                                                                                                    cover_rate, ssim))
+                misc.imsave(sample_img_path, merged_img)
+
+
+            # merged_pair = np.concatenate([merged_real_images, merged_fake_images], axis=1)
+            #
+            # sample_img_path = os.path.join(model_sample_dir, "sample_%02d_%04d_%d.png" % (epoch, step, idx))
+            # misc.imsave(sample_img_path, merged_pair)
+
 
         # total_batches = data_provider.computer_val_total_batch_num(self.batch_size)
         # for i in range(total_batches):
