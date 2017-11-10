@@ -312,10 +312,13 @@ class Font2Font(object):
         if not os.path.exists(model_sample_dir):
             os.makedirs(model_sample_dir)
 
-        for fake_img in fake_imgs:
-            sample_img_path = os.path.join(model_sample_dir, "test_%03d_%04d.png" % (epoch, step))
-            fake_img = scale_back(fake_img)
-            misc.imsave(sample_img_path, fake_img)
+        merged_fake_images = merge(scale_back(fake_imgs), [self.batch_size, 1])
+        merged_real_images = merge(scale_back(real_imgs), [self.batch_size, 1])
+        merged_pair = np.concatenate([merged_real_images, merged_fake_images], axis=1)
+
+        for idx, meg in enumerate(merged_pair):
+            sample_img_path = os.path.join(model_sample_dir, "test_%03d_%04d_%04d.png" % (epoch, step, idx))
+            misc.imsave(sample_img_path, meg)
 
         # merged_fake_images = merge(scale_back(fake_imgs), [self.batch_size, 1])
         # merged_real_images = merge(scale_back(real_imgs), [self.batch_size, 1])
