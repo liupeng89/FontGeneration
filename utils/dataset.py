@@ -5,7 +5,7 @@ import pickle
 import numpy as np
 import random
 import os
-from utils.uitls import pad_seq, bytes_to_file, read_split_image, shift_and_resize_image, normalize_image
+from utils.utils import pad_seq, bytes_to_file, read_split_image, shift_and_resize_image, normalize_image
 
 
 class PickledImageProvider(object):
