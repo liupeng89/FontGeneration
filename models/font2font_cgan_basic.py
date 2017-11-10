@@ -295,7 +295,8 @@ class Font2Font(object):
         d_loss, g_loss, l1_loss = self.sess.run([eval_handle.generator,
                                                  eval_handle.target,
                                                  loss_handle.d_loss,
-                                                 loss_handle.g_loss],
+                                                 loss_handle.g_loss,
+                                                 loss_handle.l1_loss],
                                                 feed_dict={
                                                     input_handle.real_data: input_images
                                                 })
@@ -476,7 +477,7 @@ class Font2Font(object):
                                                                         learning_rate_d: current_lr_d
                                                                         })
                 passed = time.time() - start_time
-                log_format = "Epoch: [%2d], [%4d/%4d] time: %4.4f, d_loss: %.5f, g_loss: %.5f, const_loss: %.5f" + \
+                log_format = "Epoch: [%2d], [%4d/%4d] time: %4.4f, d_loss: %.5f, g_loss: %.5f, const_loss: %.5f, " + \
                              "cheat_loss: %.5f, l1_loss: %.5f, tv_loss: %.5f, d_loss_real: %.5f, " + \
                              "d_loss_fake: %.5f"
                 print(log_format % (ei, bid, total_batches, passed, batch_d_loss, batch_g_loss, const_loss, cheat_loss,
