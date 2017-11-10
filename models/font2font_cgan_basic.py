@@ -284,6 +284,7 @@ class Font2Font(object):
 
         for fake_img in fake_imgs:
             sample_img_path = os.path.join(model_sample_dir, "test_%03d_%04d.png" % (epoch, step))
+            fake_img = merge(scale_back(fake_img), [1, 1])
             misc.imsave(sample_img_path, fake_img)
 
         # merged_fake_images = merge(scale_back(fake_imgs), [self.batch_size, 1])
