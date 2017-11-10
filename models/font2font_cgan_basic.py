@@ -319,9 +319,48 @@ class Font2Font(object):
         sample_img_path = os.path.join(model_sample_dir, "sample_%02d_%04d.png" % (epoch, step))
         misc.imsave(sample_img_path, merged_pair)
 
+    def validate_model(self, data_provider, epoch, step):
+
+        val_batch_iter = data_provider.get_val_iter(self.batch_size)
+
+        for idx, batch in enumerate(val_batch_iter):
+            fake_imgs, real_imgs, d_loss, g_loss, l1_loss = self.generate_fake_samples(batch)
+            print(" %d---Sample: d_loss: %.5f, g_loss: %.5f, l1_loss: %.5f" % (idx, d_loss, g_loss, l1_loss))
+
+            model_id, _ = self.get_model_id_and_dir()
+            model_sample_dir = os.path.join(self.sample_dir, model_id)
+            if not os.path.exists(model_sample_dir):
+                os.makedirs(model_sample_dir)
+
+            merged_fake_images = merge(scale_back(fake_imgs), [self.batch_size, 1])
+            merged_real_images = merge(scale_back(real_imgs), [self.batch_size, 1])
+            merged_pair = np.concatenate([merged_real_images, merged_fake_images], axis=1)
+
+            sample_img_path = os.path.join(model_sample_dir, "sample_%02d_%04d_%d.png" % (epoch, step, idx))
+            misc.imsave(sample_img_path, merged_pair)
+
+        # total_batches = data_provider.computer_val_total_batch_num(self.batch_size)
+        # for i in range(total_batches):
+        #     val_batch_iter = data_provider.get_val_iter(self.batch_size)
+        #
+        #     fake_imgs, real_imgs, d_loss, g_loss, l1_loss = self.generate_fake_samples(images)
+        #     print("Sample: d_loss: %.5f, g_loss: %.5f, l1_loss: %.5f" % (d_loss, g_loss, l1_loss))
+        #
+        #     model_id, _ = self.get_model_id_and_dir()
+        #     model_sample_dir = os.path.join(self.sample_dir, model_id)
+        #     if not os.path.exists(model_sample_dir):
+        #         os.makedirs(model_sample_dir)
+        #
+        #     merged_fake_images = merge(scale_back(fake_imgs), [self.batch_size, 1])
+        #     merged_real_images = merge(scale_back(real_imgs), [self.batch_size, 1])
+        #     merged_pair = np.concatenate([merged_real_images, merged_fake_images], axis=1)
+        #
+        #     sample_img_path = os.path.join(model_sample_dir, "sample_%02d_%04d.png" % (epoch, step))
+        #     misc.imsave(sample_img_path, merged_pair)
+
         # for idx, meg in enumerate(merged_pair):
         #     sample_img_path = os.path.join(model_sample_dir, "test_%03d_%04d_%04d.png" % (epoch, step, idx))
-        #     misc.imsave(sample_img_path, meg)
+        #     misc.imsave(sample_img_path, meg) data_provider
 
         # merged_fake_images = merge(scale_back(fake_imgs), [self.batch_size, 1])
         # merged_real_images = merge(scale_back(real_imgs), [self.batch_size, 1])
