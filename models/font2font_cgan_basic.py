@@ -29,7 +29,8 @@ MIN_LR_D = 0.000001
 
 class Font2Font(object):
     def __init__(self, experiment_dir=None, experiment_id=0, batch_size=16, input_width=256, output_width=256,
-                 generator_dim=64, discriminator_dim=64, input_filters=1, output_filters=1):
+                 generator_dim=64, discriminator_dim=64, input_filters=1, output_filters=1, L1_penalty=100.0,
+                 Lconst_penalty=15.0, Ltv_penalty=0.0):
         self.experiment_dir = experiment_dir
         self.experiment_id = experiment_id
         self.batch_size = batch_size
@@ -39,6 +40,10 @@ class Font2Font(object):
         self.discriminator_dim = discriminator_dim
         self.input_filters = input_filters
         self.output_filters = output_filters
+
+        self.L1_penalty = L1_penalty
+        self.Lconst_penalty = Lconst_penalty
+        self.Ltv_penalty = Ltv_penalty
         # init all the directories
         self.sess = None
         # experiment_dir is needed for training
@@ -110,8 +115,8 @@ class Font2Font(object):
                 return dec
 
             d1 = decode_layer(encoded, s128, self.generator_dim * 8, layer=1, enc_layer=encoding_layers["e7"])
-            d2 = decode_layer(d1, s64, self.generator_dim * 8, layer=2, enc_layer=encoding_layers["e6"])
-            d3 = decode_layer(d2, s32, self.generator_dim * 8, layer=3, enc_layer=encoding_layers["e5"])
+            d2 = decode_layer(d1, s64, self.generator_dim * 8, layer=2, enc_layer=encoding_layers["e6"], dropout=True)
+            d3 = decode_layer(d2, s32, self.generator_dim * 8, layer=3, enc_layer=encoding_layers["e5"], dropout=True)
             d4 = decode_layer(d3, s16, self.generator_dim * 8, layer=4, enc_layer=encoding_layers["e4"])
             d5 = decode_layer(d4, s8, self.generator_dim * 4, layer=5, enc_layer=encoding_layers["e3"])
             d6 = decode_layer(d5, s4, self.generator_dim * 2, layer=6, enc_layer=encoding_layers["e2"])
@@ -174,27 +179,49 @@ class Font2Font(object):
         real_D, real_D_logits = self.discriminator(real_AB, is_training=is_training, reuse=False)
         fake_D, fake_D_logits = self.discriminator(fake_AB, is_training=is_training, reuse=True)
 
+        # encoding constant loss
+        # this loss assume that generated imaged and real image
+        # should reside in the same space and close to each other
+        encoded_fake_B = self.encoder(fake_B, is_training, reuse=True)[0]
+        const_loss = (tf.reduce_mean(tf.square(encoded_real_A - encoded_fake_B))) * self.Lconst_penalty
+
+        # L1 loss between real and generated images
+        l1_loss = self.L1_penalty * tf.reduce_mean(tf.abs(fake_B - real_B))
+
+        # maximize the chance generator fool the discriminator
+        cheat_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_D_logits,
+                                                                            labels=tf.ones_like(fake_D)))
+
+        # total variation loss
+        width = self.output_width
+        tv_loss = (tf.nn.l2_loss(fake_B[:, 1:, :, :] - fake_B[:, :width - 1, :, :]) / width
+                   + tf.nn.l2_loss(fake_B[:, :, 1:, :] - fake_B[:, :, :width - 1, :]) / width) * self.Ltv_penalty
+
         # binary real/fake loss
         d_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=real_D_logits,
                                                                              labels=tf.ones_like(real_D)))
         d_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_D_logits,
                                                                              labels=tf.zeros_like(fake_D)))
         # g_loss
-        g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=fake_D_logits,
-                                                                            labels=tf.ones_like(fake_D)))
+        g_loss = const_loss + tv_loss + cheat_loss + l1_loss
         # d_loss
         d_loss = d_loss_real + d_loss_fake
 
+        l1_loss_summary = tf.summary.scalar("l1_loss", l1_loss)
+        const_loss_summary = tf.summary.scalar("const_loss", const_loss)
+        cheat_loss_summary = tf.summary.scalar("cheat_loss", cheat_loss)
         d_loss_summary = tf.summary.scalar("d_loss", d_loss)
         g_loss_summary = tf.summary.scalar("g_loss", g_loss)
+        tv_loss_summary = tf.summary.scalar("tv_loss", tv_loss)
         d_merged_summary = tf.summary.merge([d_loss_summary])
-
-        g_merged_summary = tf.summary.merge([g_loss_summary])
+        g_merged_summary = tf.summary.merge([l1_loss_summary, cheat_loss_summary, const_loss_summary,
+                                             g_loss_summary, tv_loss_summary])
 
         # expose useful nodes in the graph as handles globally
         input_handle = InputHandle(real_data=real_data)
 
-        loss_handle = LossHandle(d_loss=d_loss, g_loss=g_loss, d_loss_real=d_loss_real, d_loss_fake=d_loss_fake)
+        loss_handle = LossHandle(d_loss=d_loss, g_loss=g_loss, l1_loss=l1_loss, d_loss_real=d_loss_real,
+                                 d_loss_fake=d_loss_fake)
 
         eval_handle = EvalHandle(encoder=encoded_real_A, generator=fake_B, target=real_B, source=real_A)
 
@@ -263,19 +290,19 @@ class Font2Font(object):
     def generate_fake_samples(self, input_images):
         input_handle, loss_handle, eval_handle, summary_handle = self.retrieve_handles()
         fake_images, real_images, \
-        d_loss, g_loss = self.sess.run([eval_handle.generator,
+        d_loss, g_loss, l1_loss = self.sess.run([eval_handle.generator,
                                                  eval_handle.target,
                                                  loss_handle.d_loss,
                                                  loss_handle.g_loss],
                                                 feed_dict={
                                                     input_handle.real_data: input_images
                                                 })
-        return fake_images, real_images, d_loss, g_loss
+        return fake_images, real_images, d_loss, g_loss, l1_loss
 
     def validate_model(self, images, epoch, step):
 
-        fake_imgs, real_imgs, d_loss, g_loss = self.generate_fake_samples(images)
-        print("Sample: d_loss: %.5f, g_loss: %.5f" % (d_loss, g_loss))
+        fake_imgs, real_imgs, d_loss, g_loss, l1_loss = self.generate_fake_samples(images)
+        print("Sample: d_loss: %.5f, g_loss: %.5f, l1_loss: %.5f" % (d_loss, g_loss, l1_loss))
 
         model_id, _ = self.get_model_id_and_dir()
         model_sample_dir = os.path.join(self.sample_dir, model_id)
@@ -284,7 +311,7 @@ class Font2Font(object):
 
         for fake_img in fake_imgs:
             sample_img_path = os.path.join(model_sample_dir, "test_%03d_%04d.png" % (epoch, step))
-            fake_img = merge(scale_back(fake_img), [1, 1])
+            fake_img = scale_back(fake_img)
             misc.imsave(sample_img_path, fake_img)
 
         # merged_fake_images = merge(scale_back(fake_imgs), [self.batch_size, 1])
@@ -301,8 +328,8 @@ class Font2Font(object):
         # misc.imsave(sample_img_path, merged_pair)
 
     def validate_train_model(self, images, epoch, step):
-        fake_imgs, real_imgs, d_loss, g_loss = self.generate_fake_samples(images)
-        print("Training set: d_loss: %.5f, g_loss: %.5f" % (d_loss, g_loss))
+        fake_imgs, real_imgs, d_loss, g_loss, l1_loss = self.generate_fake_samples(images)
+        print("Training set: d_loss: %.5f, g_loss: %.5f, l1_loss: %.5f" % (d_loss, g_loss, l1_loss))
 
         merged_fake_images = merge(scale_back(fake_imgs), [self.batch_size, 1])
         merged_real_images = merge(scale_back(real_imgs), [self.batch_size, 1])
@@ -427,7 +454,7 @@ class Font2Font(object):
                                                                       learning_rate_d: current_lr_d,
                                                                       learning_rate_g: current_lr_g})
                 # Optimize G
-                _, batch_g_loss = self.sess.run([g_optimizer, loss_handle.g_loss],
+                _, batch_g_loss = self.sess.run([g_optimizer, loss_handle.g_loss, loss_handle.l1_loss],
                                                 feed_dict={
                                                     real_data: batch_images,
                                                     learning_rate_g: current_lr_g,
@@ -435,17 +462,24 @@ class Font2Font(object):
                 # magic move to Optimize G again
                 # according to https://github.com/carpedm20/DCGAN-tensorflow
                 # collect all the losses along the way
-                _, batch_g_loss, g_summary = self.sess.run([g_optimizer,
-                                                                         loss_handle.g_loss,
-                                                                         summary_handle.g_merged],
-                                                                        feed_dict={ real_data: batch_images,
-                                                                                    learning_rate_g: current_lr_g,
-                                                                                    learning_rate_d: current_lr_d
+                _, batch_g_loss, g_summary, const_loss, cheat_loss, l1_loss, tv_loss\
+                                                            = self.sess.run([g_optimizer, loss_handle.g_loss,
+                                                            loss_handle.const_loss,
+                                                            loss_handle.cheat_loss,
+                                                            loss_handle.l1_loss,
+                                                            loss_handle.tv_loss,
+                                                            summary_handle.g_merged],
+                                                            feed_dict={ real_data: batch_images,
+                                                                        learning_rate_g: current_lr_g,
+                                                                        learning_rate_d: current_lr_d
                                                                         })
                 passed = time.time() - start_time
-                log_format = "Epoch: [%2d], [%4d/%4d] time: %4.4f, d_loss: %.5f, g_loss: %.5f, " + \
-                             "d_loss_real: %.5f, d_loss_fake: %.5f"
-                print(log_format % (ei, bid, total_batches, passed, batch_d_loss, batch_g_loss, batch_d_loss_real,
+                log_format = "Epoch: [%2d], [%4d/%4d] time: %4.4f, d_loss: %.5f, g_loss: %.5f, const_loss: %.5f" + \
+                             "cheat_loss: %.5f, l1_loss: %.5f, tv_loss: %.5f, d_loss_real: %.5f, " + \
+                             "d_loss_fake: %.5f"
+                print(log_format % (ei, bid, total_batches, passed, batch_d_loss, batch_g_loss, const_loss, cheat_loss,
+                                    l1_loss, tv_loss,
+                                    batch_d_loss_real,
                                     batch_d_loss_fake))
                 summary_writer.add_summary(d_summary, counter)
                 summary_writer.add_summary(g_summary, counter)
