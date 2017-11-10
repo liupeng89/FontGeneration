@@ -466,11 +466,11 @@ class Font2Font(object):
                 # collect all the losses along the way
                 _, batch_g_loss, g_summary, const_loss, cheat_loss, l1_loss, tv_loss\
                                                             = self.sess.run([g_optimizer, loss_handle.g_loss,
+                                                                             summary_handle.g_merged,
                                                             loss_handle.const_loss,
                                                             loss_handle.cheat_loss,
                                                             loss_handle.l1_loss,
-                                                            loss_handle.tv_loss,
-                                                            summary_handle.g_merged],
+                                                            loss_handle.tv_loss],
                                                             feed_dict={ real_data: batch_images,
                                                                         learning_rate_g: current_lr_g,
                                                                         learning_rate_d: current_lr_d
@@ -480,9 +480,7 @@ class Font2Font(object):
                              "cheat_loss: %.5f, l1_loss: %.5f, tv_loss: %.5f, d_loss_real: %.5f, " + \
                              "d_loss_fake: %.5f"
                 print(log_format % (ei, bid, total_batches, passed, batch_d_loss, batch_g_loss, const_loss, cheat_loss,
-                                    l1_loss, tv_loss,
-                                    batch_d_loss_real,
-                                    batch_d_loss_fake))
+                                    l1_loss, tv_loss, batch_d_loss_real, batch_d_loss_fake))
                 summary_writer.add_summary(d_summary, counter)
                 summary_writer.add_summary(g_summary, counter)
 
