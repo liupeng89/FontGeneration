@@ -456,7 +456,7 @@ class Font2Font(object):
                                                                       learning_rate_d: current_lr_d,
                                                                       learning_rate_g: current_lr_g})
                 # Optimize G
-                _, batch_g_loss = self.sess.run([g_optimizer, loss_handle.g_loss, loss_handle.l1_loss],
+                _, batch_g_loss = self.sess.run([g_optimizer, loss_handle.g_loss],
                                                 feed_dict={
                                                     real_data: batch_images,
                                                     learning_rate_g: current_lr_g,
